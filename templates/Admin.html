@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Admin Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body{background:linear-gradient(to right,#6dd5fa,#2980b9);min-height:100vh;color:#333;font-family:'Segoe UI',sans-serif}
+    .card{background:#fff;border-radius:20px;padding:30px;box-shadow:0 8px 16px rgba(0,0,0,.25)}
+    h2,h4{font-weight:700}
+    .table thead{background:#003366;color:#fff}
+    .table tbody tr:nth-child(even){background:#f3f9fd}
+    .btn-sm{padding:6px 12px;font-weight:600}
+    .btn-danger{background:#e74c3c;border:none}
+    .btn-warning{background:#f39c12;border:none;color:#fff}
+    .btn-primary{background:linear-gradient(to right,#3498db,#2ecc71);border:none;font-weight:600}
+    .btn-success{background:#28a745;border:none}
+    .badge.bg-secondary{background:#6c757d;font-size:.85em}
+    .table-container{max-height:400px;overflow-y:auto;border:1px solid #ddd;border-radius:8px}
+  </style>
+</head>
+<body class="d-flex justify-content-center align-items-center p-4">
+
+<div class="card container">
+  <h2 class="text-center mb-4 text-primary">Admin Dashboard</h2>
+
+  {% with msgs = get_flashed_messages(with_categories=True) %}
+    {% for cat,msg in msgs %}
+      <div class="alert alert-{{cat}} alert-dismissible fade show">
+        {{ msg }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+  {% endwith %}
+
+  <!-- ── Search bar ─────────────────────────────────────────────── -->
+  <form class="row g-2 mb-4" method="get" action="{{ url_for('search_user') }}">
+    <div class="col-md-9">
+      <input type="text" class="form-control" name="q"
+             placeholder="Search by name or roll number…" value="{{ request.args.get('q','') }}"
+             required>
+    </div>
+    <div class="col-md-3 d-grid">
+      <button class="btn btn-primary">Search</button>
+    </div>
+  </form>
+
+  {% if searched %}
+  <!-- ── Search results ─────────────────────────────────────────── -->
+  <h4 class="text-dark">Search Results</h4>
+  {% if results %}
+  <div class="table-responsive mb-4">
+    <table class="table table-bordered table-hover text-center align-middle">
+      <thead><tr>
+        <th>Roll</th><th>Name</th><th>Total Detections</th><th>Last Detected (IST)</th>
+      </tr></thead>
+      <tbody>
+        {% for r in results %}
+        <tr>
+          <td>{{ r.roll }}</td>
+          <td>{{ r.name }}</td>
+          <td>{{ r.detections() }}</td>
+          <td>{{ r.last_detected()|to_ist_str if r.last_detected() else "—" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    <p class="text-muted mb-4">No matching user found.</p>
+  {% endif %}
+  {% endif %}
+
+  <!-- ── Auth users ─────────────────────────────────────────────── -->
+  <h4 class="text-dark mt-4">Auth Accounts</h4>
+  <div class="table-responsive mb-4">
+    <table class="table table-bordered table-hover text-center align-middle">
+      <thead><tr><th>ID</th><th>Username</th><th>Email</th><th>Action</th></tr></thead>
+      <tbody>
+        {% for u in users %}
+        <tr>
+          <td>{{u.id}}</td><td>{{u.username}}</td><td>{{u.email}}</td>
+          <td>
+            {% if not u.is_admin %}
+            <form method="post" action="{{url_for('delete_user',user_id=u.id)}}"
+                  onsubmit="return confirm('Delete {{u.username}}?');">
+              <button class="btn btn-danger btn-sm">Delete</button>
+            </form>
+            {% else %}<span class="badge bg-secondary">Admin</span>{% endif %}
+          </td>
+        </tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ── Faces summary ──────────────────────────────────────────── -->
+  <h4 class="text-dark mt-4">Registered Faces (Total Detections)</h4>
+  <div class="table-responsive mb-4">
+    <table class="table table-bordered table-hover text-center align-middle">
+      <thead><tr><th>Roll</th><th>Name</th><th>Detections</th></tr></thead>
+      <tbody>
+        {% for f in face_users %}
+        <tr><td>{{f.roll}}</td><td>{{f.name}}</td><td>{{f.detections()}}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ── Latest detections header with Export button ─────────────── -->
+  <div class="d-flex justify-content-between align-items-center mb-2">
+    <h4 class="text-dark">Latest Detections&nbsp;(IST)</h4>
+
+    <div class="d-flex gap-2">
+      <form method="get" action="{{ url_for('export_logs') }}">
+        <button class="btn btn-success btn-sm">Export&nbsp;Logs&nbsp;CSV</button>
+      </form>
+
+      <form method="post" action="{{ url_for('clear_logs') }}"
+            onsubmit="return confirm('Clear ALL detection logs?');">
+        <button class="btn btn-warning btn-sm">Clear&nbsp;Logs</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="table-container mb-4">
+    <table class="table table-bordered table-hover text-center align-middle mb-0">
+      <thead><tr>
+        <th>#</th><th>Roll</th><th>Name</th><th>Detected At (IST)</th>
+      </tr></thead>
+      <tbody>
+        {% for log, person in logs %}
+        <tr>
+          <td>{{loop.index}}</td>
+          <td>{{person.roll}}</td>
+          <td>{{person.name}}</td>
+          <td>{{log.detected_at | to_ist_str}}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="text-center">
+    <a href="{{url_for('index')}}" class="btn btn-primary">← Back to Home</a>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Virtual Gate Access System</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <!-- Bootstrap -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <style>
+    /* ── Overall page look ──────────────────────────── */
+    body{
+      margin:0;
+      min-height:100vh;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      background:rgba(8, 169, 243, 1);
+      font-family:system-ui,Segoe UI,Roboto,sans-serif;
+      color:#fff;
+      overflow-x:hidden;
+    }
+
+    /* ── Frosted‑glass webcam container ─────────────── */
+    .glass{
+      backdrop-filter:blur(10px) saturate(140%);
+      background:rgba(255,255,255,.15);
+      border-radius:1.25rem;
+      padding:1.5rem;
+      box-shadow:0 8px 24px rgba(0,0,0,.25);
+      max-width:720px;
+      width:clamp(320px,90vw,960px);
+    }
+
+    #wrapper{position:relative;width:100%;}
+    #video,#overlay{
+      width:100%;
+      border-radius:1rem;
+    }
+    #overlay{position:absolute;top:0;left:0;}
+
+    /* ── Result read‑out ───────────────────────────── */
+    #result{
+      margin-top:.75rem;
+      font-weight:600;
+      text-align:center;
+    }
+
+    /* ── Floating toolbox buttons ──────────────────── */
+    .fab-set{
+      position:fixed;
+      top:1.2rem;
+      right:1.2rem;
+      display:flex;
+      flex-direction:column;
+      gap:.5rem;
+      z-index:1000;
+    }
+    .fab{
+      display:flex;
+      align-items:center;
+      gap:.35rem;
+      padding:.55rem .9rem;
+      background:#ffffffee;
+      color:#333;
+      border-radius:50px;
+      font-size:.875rem;
+      text-decoration:none;
+      transition:background .2s;
+      box-shadow:0 2px 6px rgba(0,0,0,.25);
+    }
+    .fab:hover{background:#e9ecef}
+    /* hide text on very small screens */
+    @media(max-width:420px){.fab span{display:none}}
+
+  </style>
+</head>
+<body>
+
+<!-- ── Floating toolbox pills ───────────────────────────────────── -->
+<div class="fab-set">
+  {% if session.get('admin') %}
+  <a class="fab" href="{{url_for('add_face')}}"><i class="bi bi-person-plus"></i><span>Add&nbsp;Face</span></a>
+  <a class="fab" href="{{url_for('admin')}}"><i class="bi bi-table"></i><span>Database</span></a>
+  {% endif %}
+  <a class="fab" href="{{url_for('register')}}"><i class="bi bi-pencil-square"></i><span>Register</span></a>
+  <a class="fab" href="{{url_for('login')}}"><i class="bi bi-box-arrow-in-right"></i><span>Login</span></a>
+  <a class="fab" href="{{url_for('logout')}}"><i class="bi bi-box-arrow-right"></i><span>Logout</span></a>
+</div>
+
+<!-- ── Main webcam panel ─────────────────────────────────────────── -->
+<div class="glass mx-auto">
+  <h3 class="text-center mb-3 fw-semibold text-light">Virtual Gate Access System</h3>
+
+  <div id="wrapper">
+    <video id="video" autoplay muted playsinline></video>
+    <canvas id="overlay"></canvas>
+  </div>
+
+  <p id="result" class="text-warning-emphasis"></p>
+</div>
+
+<!-- ── Bootstrap Icons (for pill icons) ──────────────────────────── -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+
+<!-- ── JS logic (unchanged core loop) ────────────────────────────── -->
+<script>
+const video   = document.getElementById('video');
+const overlay = document.getElementById('overlay');
+const ctx     = overlay.getContext('2d');
+const result  = document.getElementById('result');
+
+// 1. Camera stream
+navigator.mediaDevices.getUserMedia({video:{facingMode:"user"}})
+  .then(s=> video.srcObject=s)
+  .catch(e=> alert("Camera error: "+e));
+
+// 2. Resize canvas
+video.addEventListener('loadedmetadata',()=>{
+  overlay.width  = video.videoWidth;
+  overlay.height = video.videoHeight;
+});
+
+// 3. Loop
+async function detectLoop(){
+  if(video.readyState===4){
+    const cap=document.createElement('canvas');
+    cap.width=video.videoWidth; cap.height=video.videoHeight;
+    cap.getContext('2d').drawImage(video,0,0);
+    const blob=await new Promise(res=> cap.toBlob(res,'image/jpeg',0.8));
+
+    const fd=new FormData(); fd.append('frame',blob,'f.jpg');
+    const faces=await fetch('{{url_for("recognize")}}',{method:'POST',body:fd})
+                  .then(r=>r.json()).catch(()=>[]);
+
+    ctx.clearRect(0,0,overlay.width,overlay.height);
+    const names=[];
+    faces.forEach(f=>{
+      names.push(f.name);
+      ctx.strokeStyle='lime'; ctx.lineWidth=2;
+      ctx.strokeRect(f.left,f.top,f.right-f.left,f.bottom-f.top);
+      ctx.font='16px sans-serif'; ctx.fillStyle='lime';
+      ctx.fillText(f.name,f.left+4,f.top-6);
+    });
+    result.textContent='Detected: '+(names.join(', ')||'None');
+  }
+  setTimeout(detectLoop,500);
+}
+detectLoop();
+</script>
+</body>
+</html>

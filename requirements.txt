@@ -1,0 +1,7 @@
+flask
+flask_sqlalchemy
+flask_mail
+face_recognition
+dlib
+numpy
+pytz
